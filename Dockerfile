@@ -1,61 +1,51 @@
-# ---- Laravel 11 on Render (Apache + PHP 8.3 + SQLite) ----
+# Minimal Laravel Dockerfile — diagnostic version
 FROM php:8.3-apache
 
-# 1) System packages + PHP extensions.
-#    NOTE: php:8.3-apache already includes mbstring — do NOT install it again.
+# Step 1: enable apache modules
+RUN a2enmod rewrite headers
+
+# Step 2: install system deps + PHP extensions in one layer
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        libzip-dev zip unzip git \
+    && apt-get install -y --no-install-recommends libzip-dev zip unzip git \
     && docker-php-ext-install pdo pdo_sqlite zip \
-    && a2enmod rewrite headers \
     && rm -rf /var/lib/apt/lists/*
 
-# 2) Composer (copy from official image — no install needed)
+# Step 3: copy composer binary from official image
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# 3) App source (respects .dockerignore — vendor/ is excluded)
+# Step 4: copy app source
+COPY . /var/www/html/
 WORKDIR /var/www/html
-COPY . .
 
-# 4) Point Apache DocumentRoot to Laravel's /public
+# Step 5: point Apache docroot to Laravel's public/
 RUN sed -ri -e 's!/var/www/html!/var/www/html/public!g' \
         /etc/apache2/sites-available/000-default.conf \
     && sed -ri -e 's!/var/www/html!/var/www/html/public!g' \
         /etc/apache2/apache2.conf \
-    && printf '\n<Directory /var/www/html/public>\n    AllowOverride All\n    Require all granted\n    Options -Indexes +FollowSymLinks\n</Directory>\n' \
+    && printf '\n<Directory /var/www/html/public>\n    AllowOverride All\n    Require all granted\n</Directory>\n' \
         >> /etc/apache2/apache2.conf
 
-# 5) Install PHP dependencies (no scripts — they need APP_KEY)
-#    Disable memory limit to avoid OOM on free-tier build instance.
-ENV COMPOSER_MEMORY_LIMIT=-1 \
-    COMPOSER_NO_INTERACTION=1
+# Step 6: composer install (no scripts since APP_KEY not set yet)
+ENV COMPOSER_MEMORY_LIMIT=-1 COMPOSER_NO_INTERACTION=1
 RUN composer install --no-dev --prefer-dist --no-scripts \
     && composer dump-autoload --no-dev --optimize
 
-# 6) Writable directories (Laravel requires these to exist & be writable)
+# Step 7: ensure storage dirs exist & are writable
 RUN mkdir -p storage/framework/sessions storage/framework/views \
-        storage/framework/cache/data storage/logs bootstrap/cache \
-    && chown -R www-data:www-data storage bootstrap/cache \
+        storage/framework/cache/data storage/logs bootstrap/cache /data \
+    && chown -R www-data:www-data storage bootstrap/cache /data \
     && chmod -R 775 storage bootstrap/cache
 
-# 7) Persistent /data directory for SQLite (Render persistent disk)
-RUN mkdir -p /data && chown www-data:www-data /data
-
-# 8) Default environment (Render env vars override these at runtime)
 ENV APP_ENV=production \
     APP_DEBUG=false \
-    APP_KEY= \
     DB_CONNECTION=sqlite \
     DB_DATABASE=/data/database.sqlite \
     SESSION_DRIVER=file \
     CACHE_DRIVER=file \
-    QUEUE_CONNECTION=sync \
-    LOG_CHANNEL=stderr \
-    APACHE_DOCUMENT_ROOT=/var/www/html/public
+    LOG_CHANNEL=stderr
 
 EXPOSE 80
 
-# 9) Entrypoint: key:generate → migrate → seed (idempotent) → apache
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
