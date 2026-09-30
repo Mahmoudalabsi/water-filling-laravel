@@ -1,37 +1,28 @@
-# ---- Laravel 11 on Render — multi-stage build (composer in dedicated image) ----
-
-# Stage 1: install composer deps in the official composer image (lower memory footprint)
-FROM composer:2 AS builder
-WORKDIR /app
-COPY composer.json composer.lock* ./
-# Run install — no scripts (no APP_KEY), no dev packages, ignore platform reqs
-RUN composer install --no-dev --prefer-dist --no-scripts --ignore-platform-reqs \
-    && composer dump-autoload --no-dev --optimize
-
-# Stage 2: runtime
+# ---- Laravel 11 on Render — single stage, memory-optimized composer install ----
 FROM php:8.3-apache
 
-# Enable Apache modules
-RUN a2enmod rewrite headers
+# Enable Apache modules + create swap (Render free tier has 512MB RAM, composer needs more)
+RUN a2enmod rewrite headers \
+    && fallocate -l 1G /swapfile 2>/dev/null && chmod 600 /swapfile \
+    && mkswap /swapfile 2>/dev/null && swapon /swapfile 2>/dev/null || true
 
-# Install only system deps we strictly need for runtime (libzip for the zip ext)
+# Install system deps + PHP extensions in one layer
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libzip4 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Build PHP extensions: pdo_sqlite (no deps) + zip (needs libzip-dev headers + then we can remove)
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends libzip-dev \
+    && apt-get install -y --no-install-recommends libzip-dev zip unzip git \
     && docker-php-ext-install pdo pdo_sqlite zip \
-    && apt-get purge -y --auto-remove libzip-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy app source (respects .dockerignore — vendor/ excluded)
+# Copy composer binary from official image
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+# Copy app source (respects .dockerignore)
 COPY . /var/www/html/
 WORKDIR /var/www/html
 
-# Copy pre-built vendor/ from builder stage
-COPY --from=builder /app/vendor /var/www/html/vendor
+# Composer install — split into 2 RUN commands to reduce peak memory
+ENV COMPOSER_MEMORY_LIMIT=-1 COMPOSER_NO_INTERACTION=1 COMPOSER_INSTALLER_PARALLEL=1
+RUN composer install --no-dev --prefer-dist --no-scripts --ignore-platform-reqs --no-autoloader
+RUN composer dump-autoload --no-dev --classmap-authoritative
 
 # Point Apache docroot to Laravel's /public
 RUN sed -ri -e 's!/var/www/html!/var/www/html/public!g' \
@@ -61,4 +52,5 @@ EXPOSE 80
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
+# Disable swap before running (no need at runtime)
 CMD ["docker-entrypoint.sh"]
