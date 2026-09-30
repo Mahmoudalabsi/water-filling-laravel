@@ -1,10 +1,8 @@
-# ---- Laravel 11 on Render — single stage, memory-optimized composer install ----
+# ---- Laravel 11 on Render — minimal, memory-friendly ----
 FROM php:8.3-apache
 
-# Enable Apache modules + create swap (Render free tier has 512MB RAM, composer needs more)
-RUN a2enmod rewrite headers \
-    && fallocate -l 1G /swapfile 2>/dev/null && chmod 600 /swapfile \
-    && mkswap /swapfile 2>/dev/null && swapon /swapfile 2>/dev/null || true
+# Enable Apache modules
+RUN a2enmod rewrite headers
 
 # Install system deps + PHP extensions in one layer
 RUN apt-get update \
@@ -19,8 +17,9 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 COPY . /var/www/html/
 WORKDIR /var/www/html
 
-# Composer install — split into 2 RUN commands to reduce peak memory
-ENV COMPOSER_MEMORY_LIMIT=-1 COMPOSER_NO_INTERACTION=1 COMPOSER_INSTALLER_PARALLEL=1
+# Composer install — split into 2 RUN commands to reduce peak memory.
+# Use --no-autoloader on install (heavy step), then run dump-autoload separately.
+ENV COMPOSER_MEMORY_LIMIT=-1 COMPOSER_NO_INTERACTION=1
 RUN composer install --no-dev --prefer-dist --no-scripts --ignore-platform-reqs --no-autoloader
 RUN composer dump-autoload --no-dev --classmap-authoritative
 
@@ -52,5 +51,4 @@ EXPOSE 80
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Disable swap before running (no need at runtime)
 CMD ["docker-entrypoint.sh"]
