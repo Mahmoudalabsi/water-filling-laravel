@@ -1,7 +1,7 @@
-# Diagnostic: just apt-get install, no docker-php-ext-install
+# Diagnostic: only pdo (without pdo_sqlite which needs libsqlite3-dev)
 FROM php:8.3-apache
 RUN a2enmod rewrite headers
-RUN apt-get update && apt-get install -y --no-install-recommends zip unzip git && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends zip unzip git libsqlite3-dev && rm -rf /var/lib/apt/lists/*
 RUN docker-php-ext-install pdo pdo_sqlite
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 COPY . /var/www/html/
