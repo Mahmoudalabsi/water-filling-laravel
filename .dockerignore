@@ -1,0 +1,11 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+README.md
+DEPLOYMENT.md
+*.log
+node_modules
+vendor
+docker-entrypoint.sh.bak
