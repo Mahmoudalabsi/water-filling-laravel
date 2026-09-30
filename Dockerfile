@@ -1,18 +1,19 @@
 # ---- Laravel 11 on Render (Apache + PHP 8.3 + SQLite) ----
 FROM php:8.3-apache
 
-# 1) System packages + PHP extensions (pdo_sqlite for SQLite, zip for composer)
+# 1) System packages + PHP extensions.
+#    NOTE: php:8.3-apache already includes mbstring — do NOT install it again.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        libzip-dev zip unzip git libonig-dev \
-    && docker-php-ext-install pdo pdo_sqlite zip mbstring \
+        libzip-dev zip unzip git \
+    && docker-php-ext-install pdo pdo_sqlite zip \
     && a2enmod rewrite headers \
     && rm -rf /var/lib/apt/lists/*
 
 # 2) Composer (copy from official image — no install needed)
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# 3) App source
+# 3) App source (respects .dockerignore — vendor/ is excluded)
 WORKDIR /var/www/html
 COPY . .
 
@@ -25,7 +26,10 @@ RUN sed -ri -e 's!/var/www/html!/var/www/html/public!g' \
         >> /etc/apache2/apache2.conf
 
 # 5) Install PHP dependencies (no scripts — they need APP_KEY)
-RUN composer install --no-interaction --no-dev --prefer-dist --no-scripts \
+#    Disable memory limit to avoid OOM on free-tier build instance.
+ENV COMPOSER_MEMORY_LIMIT=-1 \
+    COMPOSER_NO_INTERACTION=1
+RUN composer install --no-dev --prefer-dist --no-scripts \
     && composer dump-autoload --no-dev --optimize
 
 # 6) Writable directories (Laravel requires these to exist & be writable)
