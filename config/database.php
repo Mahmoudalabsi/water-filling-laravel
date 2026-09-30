@@ -1,22 +1,39 @@
 <?php
 
+use Illuminate\Support\Str;
+
+// If DATABASE_URL is set, auto-detect driver from it.
+$dbUrl = env('DATABASE_URL');
+$defaultConnection = env('DB_CONNECTION', $dbUrl ? 'pgsql' : 'sqlite');
+
+if ($dbUrl) {
+    $parsed = parse_url($dbUrl);
+    if (isset($parsed['scheme'])) {
+        $defaultConnection = $parsed['scheme'] === 'postgres' ? 'pgsql' : $parsed['scheme'];
+    }
+}
+
+// SQLite path: prefer /data/database.sqlite (Render persistent disk)
+// If not available, fall back to local storage
+$sqlitePath = file_exists('/data') ? '/data/database.sqlite' : database_path('database.sqlite');
+
 return [
 
-    'default' => env('DB_CONNECTION', 'pgsql'),
+    'default' => $defaultConnection,
 
     'connections' => [
 
         'sqlite' => [
             'driver' => 'sqlite',
             'url' => env('DB_URL'),
-            'database' => env('DB_DATABASE', database_path('database.sqlite')),
+            'database' => env('DB_DATABASE', $sqlitePath),
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
         ],
 
         'mysql' => [
             'driver' => 'mysql',
-            'url' => env('DB_URL'),
+            'url' => env('DB_URL', env('DATABASE_URL')),
             'host' => env('DB_HOST', '127.0.0.1'),
             'port' => env('DB_PORT', '3306'),
             'database' => env('DB_DATABASE', 'laravel'),
@@ -34,48 +51,35 @@ return [
             ]) : [],
         ],
 
-        'pgsql' => [
-            'driver' => 'pgsql',
-            'url' => env('DB_URL'),
-            'host' => env('DB_HOST', '127.0.0.1'),
-            'port' => env('DB_PORT', '5432'),
-            'database' => env('DB_DATABASE', 'laravel'),
-            'username' => env('DB_USERNAME', 'root'),
-            'password' => env('DB_PASSWORD', ''),
-            'charset' => 'utf8',
-            'prefix' => '',
-            'prefix_indexes' => true,
-            'search_path' => 'public',
-            'sslmode' => env('DB_SSLMODE', 'prefer'),
-        ],
+        'pgsql' => (function () use ($dbUrl) {
+            $cfg = [
+                'driver' => 'pgsql',
+                'url' => env('DB_URL', env('DATABASE_URL')),
+                'host' => env('DB_HOST', '127.0.0.1'),
+                'port' => env('DB_PORT', '5432'),
+                'database' => env('DB_DATABASE', 'laravel'),
+                'username' => env('DB_USERNAME', 'root'),
+                'password' => env('DB_PASSWORD', ''),
+                'charset' => 'utf8',
+                'prefix' => '',
+                'prefix_indexes' => true,
+                'search_path' => 'public',
+                'sslmode' => env('DB_SSLMODE', 'prefer'),
+            ];
+            if ($dbUrl) {
+                $parsed = parse_url($dbUrl);
+                $cfg['host'] = $parsed['host'] ?? $cfg['host'];
+                $cfg['port'] = $parsed['port'] ?? $cfg['port'];
+                $cfg['database'] = isset($parsed['path']) ? ltrim($parsed['path'], '/') : $cfg['database'];
+                $cfg['username'] = $parsed['user'] ?? $cfg['username'];
+                $cfg['password'] = $parsed['pass'] ?? $cfg['password'];
+            }
+            return $cfg;
+        })(),
     ],
 
     'migrations' => [
         'table' => 'migrations',
         'update_date_on_publish' => true,
-    ],
-
-    'redis' => [
-        'client' => env('REDIS_CLIENT', 'phpredis'),
-        'options' => [
-            'cluster' => env('REDIS_CLUSTER', 'redis'),
-            'prefix' => env('REDIS_PREFIX', Str::slug(env('APP_NAME', 'laravel'), '_').'_database_'),
-        ],
-        'default' => [
-            'url' => env('REDIS_URL'),
-            'host' => env('REDIS_HOST', '127.0.0.1'),
-            'username' => env('REDIS_USERNAME'),
-            'password' => env('REDIS_PASSWORD'),
-            'port' => env('REDIS_PORT', '6379'),
-            'database' => env('REDIS_DB', '0'),
-        ],
-        'cache' => [
-            'url' => env('REDIS_URL'),
-            'host' => env('REDIS_HOST', '127.0.0.1'),
-            'username' => env('REDIS_USERNAME'),
-            'password' => env('REDIS_PASSWORD'),
-            'port' => env('REDIS_PORT', '6379'),
-            'database' => env('REDIS_CACHE_DB', '1'),
-        ],
     ],
 ];
