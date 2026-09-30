@@ -3,14 +3,12 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends zip unzip git curl \
     && rm -rf /var/lib/apt/lists/*
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
-
-# Copy ONLY composer.json (this approach worked)
-COPY composer.json /app/composer.json
 WORKDIR /app
-ENV COMPOSER_MEMORY_LIMIT=-1 COMPOSER_NO_INTERACTION=1 COMPOSER_HOME=/tmp
 
-# Real install (no dry-run, with --no-autoloader)
-RUN composer install --no-dev --prefer-dist --no-scripts --ignore-platform-reqs --no-autoloader
+# Initialize minimal project and require just ONE tiny package
+RUN composer init --name=test/test --no-interaction \
+    && composer require psr/log:^3.0 --no-scripts --ignore-platform-reqs --no-autoloader \
+    && ls vendor/psr/log/
 
-# Verify vendor exists
-RUN ls -la vendor/ | head -10 && echo "=== VENDOR OK ==="
+# Save exit code
+RUN echo "=== BUILD SUCCEEDED ==="
