@@ -1,25 +1,41 @@
+# ---- Laravel 11 on Render — MINIMAL build (vendor/ pre-built by GitHub Actions) ----
+# NOTE: php:8.3-apache ALREADY includes pdo_sqlite, sqlite3, mbstring, etc.
+#       So no docker-php-ext-install and no composer install are needed here.
+
 FROM php:8.3-apache
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends zip unzip git curl \
-    && rm -rf /var/lib/apt/lists/*
 
-# Test 1: Can we reach packagist metadata?
-RUN curl -sSL -o /tmp/packagist.json -w "packagist: %{http_code} | size: %{size_download} | time: %{time_total}s\n" \
-      https://repo.packagist.org/p2/psr/log.json \
-    && head -c 200 /tmp/packagist.json \
-    && echo "" \
-    && echo "=== packagist OK ==="
+# Enable Apache modules (rewrite for Laravel routes)
+RUN a2enmod rewrite headers
 
-# Test 2: Can we download a GitHub release ZIP directly?
-RUN curl -sSL -o /tmp/test.zip -w "github-zip: %{http_code} | size: %{size_download} | time: %{time_total}s\n" \
-      https://github.com/php-fig/log/archive/refs/tags/3.0.2.zip \
-    && ls -la /tmp/test.zip
+# Copy app source (vendor/ is now committed to the repo by GitHub Actions)
+COPY . /var/www/html/
+WORKDIR /var/www/html
 
-# Test 3: Install composer and try real install
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
-WORKDIR /app
-RUN composer init --name=test/test --no-interaction
-RUN composer require psr/log:^3.0 --no-scripts --ignore-platform-reqs --no-autoloader 2>&1; \
-    echo "=== composer require exit: $? ==="; \
-    ls -la vendor/ 2>&1; \
-    cat /root/.composer/cache/psr/log/* 2>&1 | head -50
+# Point Apache DocumentRoot to Laravel's /public
+RUN sed -ri -e 's!/var/www/html!/var/www/html/public!g' \
+        /etc/apache2/sites-available/000-default.conf \
+    && sed -ri -e 's!/var/www/html!/var/www/html/public!g' \
+        /etc/apache2/apache2.conf \
+    && printf '\n<Directory /var/www/html/public>\n    AllowOverride All\n    Require all granted\n    Options -Indexes +FollowSymLinks\n</Directory>\n' \
+        >> /etc/apache2/apache2.conf
+
+# Ensure storage dirs exist & are writable by www-data
+RUN mkdir -p storage/framework/sessions storage/framework/views \
+        storage/framework/cache/data storage/logs bootstrap/cache /data \
+    && chown -R www-data:www-data storage bootstrap/cache /data \
+    && chmod -R 775 storage bootstrap/cache
+
+ENV APP_ENV=production \
+    APP_DEBUG=false \
+    DB_CONNECTION=sqlite \
+    DB_DATABASE=/data/database.sqlite \
+    SESSION_DRIVER=file \
+    CACHE_DRIVER=file \
+    LOG_CHANNEL=stderr
+
+EXPOSE 80
+
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+CMD ["docker-entrypoint.sh"]

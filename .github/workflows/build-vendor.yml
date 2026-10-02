@@ -1,0 +1,60 @@
+name: Build vendor (composer install) and commit to repo
+
+# This workflow runs composer install on GitHub's runners (7GB RAM, full network)
+# and commits the resulting vendor/ directory + composer.lock back to the repo.
+# Render then builds the Docker image WITHOUT needing composer at all.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'vendor/**'
+      - '.github/**'
+      - '**.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-vendor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, xml, ctype, iconv, curl, dom, zip, pdo, pdo_sqlite
+          coverage: none
+
+      - name: Validate composer.json
+        run: composer validate --strict
+
+      - name: Composer install (production, no scripts)
+        run: |
+          composer install --no-dev --prefer-dist --no-scripts --no-interaction --no-progress
+          composer dump-autoload --no-dev --classmap-authoritative
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if [ -n "$(git status --porcelain vendor composer.lock)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No vendor changes to commit"
+          fi
+
+      - name: Commit vendor + composer.lock
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add vendor composer.lock
+          git commit -m "chore: build vendor via GitHub Actions [auto]"
+          git push origin main
