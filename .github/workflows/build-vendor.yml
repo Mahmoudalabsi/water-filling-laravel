@@ -38,7 +38,7 @@ jobs:
       - name: Composer install (production, no scripts)
         run: |
           composer install --no-dev --prefer-dist --no-scripts --no-interaction --no-progress
-          composer dump-autoload --no-dev --classmap-authoritative
+          composer dump-autoload --no-dev --classmap-authoritative --no-scripts
 
       - name: Check for changes
         id: changes
