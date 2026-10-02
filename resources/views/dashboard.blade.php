@@ -197,15 +197,7 @@
 </div>
 
 <script>
-window.__INITIAL_DATA__ = @json([
-    'families' => $families->map(fn ($f) => [
-        'id' => $f->id,
-        'name' => $f->name,
-        'activeSession' => $f->sessions->first(fn ($s) => $s->end_time === null),
-        'lastSession' => $f->sessions->filter(fn ($s) => $s->end_time !== null && $s->price_per_minute !== null)->first(),
-    ]),
-    'settings' => $settings,
-]);
+window.__INITIAL_DATA__ = @json($initialData);
 </script>
 <script src="/js/meter-ocr.js"></script>
 <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>

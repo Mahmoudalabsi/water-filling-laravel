@@ -39,10 +39,28 @@ class HomeController extends Controller
         $freeSeconds = $freeMinutes * 60;
         $usedPct = $freeSeconds > 0 ? min(100, ($totalSecondsThisWeek / $freeSeconds) * 100) : 0;
 
+        // Prepare JSON payload for the Alpine.js dashboard (moved here to keep Blade simple)
+        $initialData = [
+            'families' => $families->map(function ($f) {
+                return [
+                    'id' => $f->id,
+                    'name' => $f->name,
+                    'activeSession' => $f->sessions->first(function ($s) {
+                        return $s->end_time === null;
+                    }),
+                    'lastSession' => $f->sessions->filter(function ($s) {
+                        return $s->end_time !== null && $s->price_per_minute !== null;
+                    })->first(),
+                ];
+            })->values(),
+            'settings' => $settings,
+        ];
+
         return view('dashboard', [
             'user' => $user,
             'families' => $families,
             'settings' => $settings,
+            'initialData' => $initialData,
             'totalSeconds' => $totalSecondsThisWeek,
             'usedMinutes' => $usedMinutes,
             'remainingMinutes' => $remainingMinutes,
