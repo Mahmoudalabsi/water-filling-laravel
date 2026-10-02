@@ -29,7 +29,7 @@ ENV APP_ENV=production \
     APP_DEBUG=false \
     DB_CONNECTION=sqlite \
     DB_DATABASE=/data/database.sqlite \
-    SESSION_DRIVER=file \
+    SESSION_DRIVER=cookie \
     CACHE_DRIVER=file \
     LOG_CHANNEL=stderr
 
