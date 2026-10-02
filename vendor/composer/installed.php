@@ -3,7 +3,7 @@
         'name' => 'water-filling/laravel-app',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => 'f280f1ad98a59f3d6c26dd8003c45b5b6016dfd5',
+        'reference' => 'd41da351ae79017b8e6f1990180ac99a7e4ff506',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -1001,7 +1001,7 @@
         'water-filling/laravel-app' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => 'f280f1ad98a59f3d6c26dd8003c45b5b6016dfd5',
+            'reference' => 'd41da351ae79017b8e6f1990180ac99a7e4ff506',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
